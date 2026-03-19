@@ -33,10 +33,8 @@ export async function POST(request: Request) {
     let reply: string;
 
     if (config.mode === "openai") {
-      console.log("Using OpenAI-compatible mode with base URL:", config.baseUrl);
       reply = await queryOpenAICompatible(systemPrompt, context, prompt, config.baseUrl, config.model);
     } else {
-      console.log("Using Ollama mode with base URL:", config.baseUrl);
       reply = await queryOllama(systemPrompt, context, prompt, config.baseUrl, config.model);
     }
 
@@ -116,7 +114,6 @@ async function queryOpenAICompatible(
   const data = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
-  console.log("OpenAI-compatible response data:", data);
 
   return data.choices?.[0]?.message?.content?.trim() || "No reply returned from the local model.";
 }
