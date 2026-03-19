@@ -2,18 +2,31 @@
 
 import { useState } from "react";
 import type { CRMSeed } from "@/lib/crm-data";
+import type { CRMDataSource } from "@/lib/crm-store";
 
 type DashboardShellProps = {
   data: CRMSeed;
+  source: CRMDataSource;
+  aiConfigured: boolean;
 };
 
-export function DashboardShell({ data }: DashboardShellProps) {
+const SUMMARY_PROMPT =
+  "Create a concise CRM summary for the operator dashboard. Include overall pipeline health, the most urgent follow-ups, at-risk accounts, and the single best next action.";
+
+export function DashboardShell({ data, source, aiConfigured }: DashboardShellProps) {
   const [prompt, setPrompt] = useState("Summarize the highest priority follow-ups for today.");
   const [reply, setReply] = useState(
     "Ask for a daily summary, suggested outreach, account risk review, or pipeline cleanup recommendations."
   );
+  const [summary, setSummary] = useState(
+    aiConfigured
+      ? "Generate an AI summary to get a compact readout of pipeline health, urgent follow-ups, and the next best move."
+      : "Configure `LOCAL_LLM_MODEL` to enable AI-generated summaries in the dashboard."
+  );
   const [isLoading, setIsLoading] = useState(false);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const totalPipeline = data.deals.reduce((sum, deal) => sum + deal.value, 0);
   const openTasks = data.tasks.filter((task) => task.status !== "Done").length;
@@ -60,6 +73,45 @@ export function DashboardShell({ data }: DashboardShellProps) {
     }
   }
 
+  async function generateSummary() {
+    if (!aiConfigured) {
+      setSummaryError("AI model is not configured.");
+      return;
+    }
+
+    setIsSummaryLoading(true);
+    setSummaryError(null);
+
+    try {
+      const response = await fetch("/api/assistant", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ prompt: SUMMARY_PROMPT })
+      });
+
+      const payload = (await response.json()) as {
+        reply?: string;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "The AI summary could not be created.");
+      }
+
+      setSummary(payload.reply || "No summary returned.");
+    } catch (requestError) {
+      setSummaryError(
+        requestError instanceof Error
+          ? requestError.message
+          : "The AI summary could not be created."
+      );
+    } finally {
+      setIsSummaryLoading(false);
+    }
+  }
+
   return (
     <main className="page-shell">
       <section className="hero">
@@ -84,6 +136,10 @@ export function DashboardShell({ data }: DashboardShellProps) {
             <div className="metric-chip">
               <span className="metric-label">At-risk accounts</span>
               <span className="metric-value">{atRiskAccounts}</span>
+            </div>
+            <div className="metric-chip">
+              <span className="metric-label">Data source</span>
+              <span className="metric-value">{source === "database" ? "Postgres" : "Dummy"}</span>
             </div>
           </div>
         </div>
@@ -115,6 +171,41 @@ export function DashboardShell({ data }: DashboardShellProps) {
 
       <section className="dashboard-grid">
         <div className="dashboard-column">
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2>AI Summary</h2>
+                <p className="muted">
+                  Generate a compact operating summary from the configured AI model and current CRM
+                  context.
+                </p>
+              </div>
+              <span className="badge">{aiConfigured ? "Configured" : "Not configured"}</span>
+            </div>
+
+            <div className="summary-panel">
+              <div className="summary-actions">
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={generateSummary}
+                  disabled={!aiConfigured || isSummaryLoading}
+                >
+                  {isSummaryLoading ? "Generating..." : "Generate summary"}
+                </button>
+                <span className="helper-text">
+                  {aiConfigured
+                    ? "Uses the currently configured local or OpenAI-compatible model."
+                    : "Set `LOCAL_LLM_MODEL` in your environment to enable this panel."}
+                </span>
+              </div>
+
+              <div className={`assistant-output summary-output${summaryError ? " is-error" : ""}`}>
+                {summaryError ? `Error: ${summaryError}` : summary}
+              </div>
+            </div>
+          </section>
+
           <section className="panel">
             <div className="panel-header">
               <div>
@@ -269,8 +360,9 @@ export function DashboardShell({ data }: DashboardShellProps) {
               </div>
 
               <div className="helper-text">
-                Configure `LOCAL_LLM_MODE`, `LOCAL_LLM_BASE_URL`, and `LOCAL_LLM_MODEL` to attach a
-                local assistant endpoint.
+                {aiConfigured
+                  ? "Uses the configured AI model for custom CRM prompts."
+                  : "Configure `LOCAL_LLM_MODEL` to attach a local assistant endpoint."}
               </div>
             </div>
 

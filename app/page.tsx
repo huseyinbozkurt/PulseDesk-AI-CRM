@@ -1,6 +1,12 @@
 import { DashboardShell } from "@/components/dashboard-shell";
-import { crmSeed } from "@/lib/crm-data";
+import { getAIConfig } from "@/lib/ai-config";
+import { loadCRMData } from "@/lib/crm-store";
 
-export default function Home() {
-  return <DashboardShell data={crmSeed} />;
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const { data, source } = await loadCRMData();
+  const { configured: aiConfigured } = getAIConfig();
+
+  return <DashboardShell data={data} source={source} aiConfigured={aiConfigured} />;
 }

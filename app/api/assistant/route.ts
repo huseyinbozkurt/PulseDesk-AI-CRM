@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
+import { getAIConfig } from "@/lib/ai-config";
 import { buildAssistantContext } from "@/lib/assistant-context";
-import { crmSeed } from "@/lib/crm-data";
+import { loadCRMData } from "@/lib/crm-store";
 
 type AssistantPayload = {
   prompt?: string;
 };
 
-const baseUrl = process.env.LOCAL_LLM_BASE_URL || "http://127.0.0.1:11434";
-const model = process.env.LOCAL_LLM_MODEL || "llama3.2";
-const mode = process.env.LOCAL_LLM_MODE || "ollama";
-
 export async function POST(request: Request) {
   try {
+    const config = getAIConfig();
     const body = (await request.json()) as AssistantPayload;
     const prompt = body.prompt?.trim();
 
@@ -19,17 +17,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
     }
 
-    const context = buildAssistantContext(crmSeed);
+    if (!config.configured || !config.model) {
+      return NextResponse.json(
+        { error: "AI model is not configured. Set LOCAL_LLM_MODEL to enable assistant features." },
+        { status: 503 }
+      );
+    }
+
+    const { data } = await loadCRMData();
+    const context = buildAssistantContext(data);
 
     const systemPrompt =
       "You are an AI copilot inside a CRM dashboard. Keep answers concise, practical, and business-focused. Prefer summaries, next steps, outreach ideas, prioritization, and CRM hygiene recommendations.";
 
     let reply: string;
 
-    if (mode === "openai") {
-      reply = await queryOpenAICompatible(systemPrompt, context, prompt);
+    if (config.mode === "openai") {
+      console.log("Using OpenAI-compatible mode with base URL:", config.baseUrl);
+      reply = await queryOpenAICompatible(systemPrompt, context, prompt, config.baseUrl, config.model);
     } else {
-      reply = await queryOllama(systemPrompt, context, prompt);
+      console.log("Using Ollama mode with base URL:", config.baseUrl);
+      reply = await queryOllama(systemPrompt, context, prompt, config.baseUrl, config.model);
     }
 
     return NextResponse.json({ reply });
@@ -43,7 +51,13 @@ export async function POST(request: Request) {
   }
 }
 
-async function queryOllama(systemPrompt: string, context: string, prompt: string) {
+async function queryOllama(
+  systemPrompt: string,
+  context: string,
+  prompt: string,
+  baseUrl: string,
+  model: string
+) {
   const response = await fetch(`${baseUrl}/api/chat`, {
     method: "POST",
     headers: {
@@ -70,7 +84,13 @@ async function queryOllama(systemPrompt: string, context: string, prompt: string
   return data.message?.content?.trim() || "No reply returned from the local model.";
 }
 
-async function queryOpenAICompatible(systemPrompt: string, context: string, prompt: string) {
+async function queryOpenAICompatible(
+  systemPrompt: string,
+  context: string,
+  prompt: string,
+  baseUrl: string,
+  model: string
+) {
   const apiKey = process.env.LOCAL_LLM_API_KEY;
 
   const response = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -96,6 +116,7 @@ async function queryOpenAICompatible(systemPrompt: string, context: string, prom
   const data = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
+  console.log("OpenAI-compatible response data:", data);
 
   return data.choices?.[0]?.message?.content?.trim() || "No reply returned from the local model.";
 }

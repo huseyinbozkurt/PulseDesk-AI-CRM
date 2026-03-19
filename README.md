@@ -6,6 +6,7 @@ A simple AI-assisted CRM and productivity dashboard built with Next.js and TypeS
 - Contact tracking and task management
 - A small AI assistant panel for summaries, prioritization, and outreach drafting
 - A local-first integration path for Ollama or OpenAI-compatible local LLM servers
+- Optional Postgres-backed CRM storage with automatic fallback to dummy data
 
 ## Getting started
 
@@ -41,7 +42,32 @@ Use these environment variables:
 - `LOCAL_LLM_MODEL` to choose the model
 - `LOCAL_LLM_API_KEY` if your local OpenAI-compatible endpoint requires one
 
+## Database integration
+
+The dashboard now supports Postgres on the server side.
+
+- If no database is configured, the app uses the built-in dummy CRM dataset.
+- If `DATABASE_URL` is configured, the app reads from Postgres instead.
+- On first run with a configured database, the app creates a `crm_snapshots` table and seeds it with the current dummy dataset if the table is empty.
+
+Use one of these environment variables:
+
+- `DATABASE_URL=postgresql://user:password@localhost:5432/pulsedesk`
+- `POSTGRES_URL=postgresql://user:password@localhost:5432/pulsedesk`
+
+Current schema:
+
+```sql
+CREATE TABLE IF NOT EXISTS crm_snapshots (
+  id BIGSERIAL PRIMARY KEY,
+  payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+`payload` stores the full CRM snapshot as JSON. The app always reads the most recent row.
+
 ## Notes
 
-- The project uses static seed data for now, which makes it easy to later replace with a database or CRM API.
+- The dummy dataset remains the fallback path when no DB is configured or the DB payload is invalid.
 - The AI assistant is intentionally limited to light-touch support instead of autonomous actions.
