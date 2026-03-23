@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { getAIConfig } from "@/lib/ai-config";
 import { buildAssistantContext } from "@/lib/assistant-context";
+import { authOptions } from "@/lib/auth";
 import { loadCRMData } from "@/lib/crm-store";
 
 type AssistantPayload = {
@@ -9,6 +11,12 @@ type AssistantPayload = {
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user) {
+      return NextResponse.json({ error: "Authentication is required." }, { status: 401 });
+    }
+
     const config = getAIConfig();
     const body = (await request.json()) as AssistantPayload;
     const prompt = body.prompt?.trim();

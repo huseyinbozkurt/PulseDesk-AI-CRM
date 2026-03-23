@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SignOutButton } from "@/components/auth-controls";
 import type { CRMSeed } from "@/lib/crm-data";
 import type { CRMDataSource } from "@/lib/crm-store";
 
@@ -8,12 +9,16 @@ type DashboardShellProps = {
   data: CRMSeed;
   source: CRMDataSource;
   aiConfigured: boolean;
+  user: {
+    name: string;
+    email: string | null;
+  };
 };
 
 const SUMMARY_PROMPT =
   "Create a concise CRM summary for the operator dashboard. Include overall pipeline health, the most urgent follow-ups, at-risk accounts, and the single best next action.";
 
-export function DashboardShell({ data, source, aiConfigured }: DashboardShellProps) {
+export function DashboardShell({ data, source, aiConfigured, user }: DashboardShellProps) {
   const [prompt, setPrompt] = useState("Summarize the highest priority follow-ups for today.");
   const [reply, setReply] = useState(
     "Ask for a daily summary, suggested outreach, account risk review, or pipeline cleanup recommendations."
@@ -116,12 +121,19 @@ export function DashboardShell({ data, source, aiConfigured }: DashboardShellPro
     <main className="page-shell">
       <section className="hero">
         <div className="hero-card">
-          <span className="hero-kicker">PulseDesk AI • CRM + productivity cockpit</span>
+          <div className="hero-row">
+            <span className="hero-kicker">PulseDesk AI • CRM + productivity cockpit</span>
+            <SignOutButton name={user.name} />
+          </div>
           <h1 className="hero-title">Work the day, not the chaos.</h1>
           <p className="hero-copy">
             A compact CRM dashboard for relationship tracking, task follow-through, and AI-guided
             prioritization. It is deliberately simple today so it stays easy to adapt to a local
             LLM workflow tomorrow.
+          </p>
+          <p className="muted signed-in-copy">
+            Signed in as <strong>{user.name}</strong>
+            {user.email ? ` · ${user.email}` : ""}
           </p>
 
           <div className="hero-metrics">
